@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Раскраска с заданиями</title>
+<style>
+  :root{
+    --font: Arial, sans-serif;
+    --bg: transparent;
+    --text: #2f241d;
+    --accent: #ff9f43;
+    --panel: 255,255,255;
+    --panel-opacity: .9;
+    --border: 255,159,67;
+    --border-opacity: .35;
+    --border-width: 2px;
+    --radius: 24px;
+    --button-text: #2f241d;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:transparent;
+    font-family:var(--font);
+    color:var(--text);
+    user-select:none;
+  }
+
+  body{ background:var(--bg); }
+
+  #app{
+    width:100vw;
+    height:100vh;
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr);
+    gap:10px;
+    padding:12px;
+  }
+
+  #questionPanel{
+    background:rgba(var(--panel), var(--panel-opacity));
+    border:var(--border-width) solid rgba(var(--border), var(--border-opacity));
+    border-radius:var(--radius);
+    box-shadow:0 10px 30px rgba(0,0,0,.13);
+    padding:20px 18px;
+    text-align:center;
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
+    z-index:10;
+  }
+
+  #progress{
+    font-weight:900;
+    font-size:14px;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:center;
+    gap:6px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .dot{
+    width:11px;
+    height:11px;
+    border-radius:50%;
+    display:inline-block;
+    background:#ddd;
+  }
+
+  .dot.done{ background:#55c96b; }
+  .dot.current{ background:var(--accent); }
+
+  #task{
+    font-size:clamp(22px, 2.8vw, 36px);
+    font-weight:900;
+    line-height:1.25;
+    white-space:pre-wrap;
+    margin:4px auto 18px;
+    max-width:1050px;
+  }
+
+  #answers{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+
+  button, .fakeButton{
+    border:0;
+    border-radius:20px;
+    padding:14px 22px;
+    background:linear-gradient(180deg,#fff,#f1f1f1);
+    box-shadow:0 5px 0 rgba(0,0,0,.18);
+    font-family:var(--font);
+    font-weight:900;
+    font-size:clamp(17px,2vw,24px);
+    color:var(--button-text);
+    cursor:pointer;
+    transition:.15s;
+    max-width:100%;
+    white-space:normal;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+  }
+
+  button:active, .fakeButton:active{
+    transform:translateY(2px);
+    box-shadow:0 2px 0 rgba(0,0,0,.18);
+  }
+
+  button.primary, .fakeButton.primary{
+    background:linear-gradient(180deg,#ffd08a,var(--accent));
+    box-shadow:0 4px 0 rgba(150,80,0,.35);
+  }
+
+  button.selected{
+    outline:4px solid rgba(76,201,240,.45);
+    background:linear-gradient(180deg,#e0f7ff,#b8efff);
+  }
+
+  input.answerInput{
+    width:min(520px,90%);
+    border:2px solid rgba(var(--border),.5);
+    border-radius:18px;
+    padding:12px 14px;
+    font-size:clamp(18px,2.2vw,26px);
+    font-family:var(--font);
+    outline:none;
+    text-align:center;
+  }
+
+  #feedback{
+    min-height:26px;
+    margin-top:10px;
+    font-size:clamp(16px,2vw,22px);
+    font-weight:900;
+  }
+
+  .good{ color:#268c2d; }
+  .bad{ color:#d62828; }
+  .info{ color:#126da3; }
+
+  #stage{
+    min-height:0;
+    display:grid;
+    grid-template-rows:minmax(0,1fr) auto;
+    gap:10px;
+    background:rgba(255,255,255,.12);
+    border-radius:var(--radius);
+    overflow:hidden;
+    padding:12px;
+  }
+
+  #canvasArea{
+    position:relative;
+    min-height:0;
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+
+  canvas{
+    display:block;
+    max-width:100%;
+    max-height:100%;
+    background:#fff;
+    border-radius:18px;
+    box-shadow:0 12px 34px rgba(0,0,0,.18);
+    touch-action:none;
+    cursor:crosshair;
+  }
+
+  canvas.locked{
+    filter:grayscale(.3) blur(.6px);
+    opacity:.42;
+    pointer-events:none;
+  }
+
+  #tools{
+    position:relative;
+    width:100%;
+    min-height:58px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    z-index:9;
+    padding:0 4px;
+  }
+
+  .toolBox{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:rgba(var(--panel),var(--panel-opacity));
+    border:var(--border-width) solid rgba(var(--border),var(--border-opacity));
+    border-radius:18px;
+    padding:7px 10px;
+    box-shadow:0 5px 18px rgba(0,0,0,.14);
+    font-weight:900;
+  }
+
+  input[type=color]{
+    width:42px;
+    height:32px;
+    border:0;
+    background:transparent;
+    cursor:pointer;
+  }
+
+  input[type=file]{ display:none; }
+
+  #palette{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    justify-content:center;
+    max-width:520px;
+    background:rgba(var(--panel),var(--panel-opacity));
+    border:var(--border-width) solid rgba(var(--border),var(--border-opacity));
+    border-radius:18px;
+    padding:7px;
+    box-shadow:0 5px 18px rgba(0,0,0,.14);
+  }
+
+  .swatch{
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    border:3px solid #fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.2);
+    cursor:pointer;
+  }
+
+  #hint,#successPop,#uploadOverlay{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    z-index:20;
+    text-align:center;
+    background:rgba(var(--panel),var(--panel-opacity));
+    border:var(--border-width) solid rgba(var(--border),var(--border-opacity));
+    border-radius:var(--radius);
+    padding:24px;
+    box-shadow:0 15px 45px rgba(0,0,0,.18);
+    font-size:clamp(18px,2.3vw,28px);
+    font-weight:900;
+    max-width:min(640px,92%);
+  }
+
+  #hint small,#uploadOverlay small{
+    display:block;
+    margin-top:8px;
+    font-size:14px;
+    opacity:.78;
+    line-height:1.35;
+  }
+
+  #uploadOverlay{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+  }
+
+  #uploadError{
+    min-height:20px;
+    font-size:15px;
+    color:#d62828;
+  }
+
+  #successPop{
+    display:none;
+    animation:pop .55s cubic-bezier(.17,.89,.32,1.27);
+  }
+
+  #successPop img{
+    max-width:180px;
+    max-height:160px;
+    display:block;
+    margin:0 auto 10px;
+    object-fit:contain;
+  }
+
+  @keyframes pop{
+    from{opacity:0;transform:translate(-50%,-50%) scale(.7);}
+    to{opacity:1;transform:translate(-50%,-50%) scale(1);}
+  }
+
+  #saveModal{
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,.38);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    padding:18px;
+  }
+
+  .saveBox{
+    width:min(720px,96vw);
+    max-height:92vh;
+    overflow:auto;
+    background:rgba(var(--panel), .96);
+    border:var(--border-width) solid rgba(var(--border), var(--border-opacity));
+    border-radius:var(--radius);
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+    padding:18px;
+    text-align:center;
+  }
+
+  .saveBox h2{
+    margin:0 0 8px;
+    font-size:24px;
+    font-weight:900;
+  }
+
+  .saveBox p{
+    margin:0 0 14px;
+    font-size:16px;
+    font-weight:700;
+    line-height:1.35;
+  }
+
+  #savePreview{
+    display:block;
+    max-width:100%;
+    max-height:55vh;
+    object-fit:contain;
+    margin:0 auto 14px;
+    border-radius:18px;
+    background:#fff;
+    box-shadow:0 8px 24px rgba(0,0,0,.18);
+  }
+
+  .saveActions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+
+  @media(max-width:650px){
+    #app{padding:8px;gap:8px;}
+    #questionPanel{padding:14px 10px;}
+    #stage{padding:8px;gap:8px;}
+    button,.fakeButton{padding:11px 15px;}
+    .swatch{width:28px;height:28px;}
+    #tools{min-height:52px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="questionPanel">
+    <div id="progress"></div>
+    <div id="task"></div>
+    <div id="answers"></div>
+    <div id="feedback"></div>
+  </div>
+
+  <div id="stage">
+    <div id="canvasArea">
+      <canvas id="canvas"></canvas>
+
+      <div id="uploadOverlay">
+        <div id="uploadTitle">Загрузи свою раскраску 🎨</div>
+        <label class="fakeButton primary" for="fileInput">Выбрать картинку</label>
+        <small>Подойдут PNG, JPG, JPEG или WEBP. Картинка загружается только в этой игре и не отправляется на сайт.</small>
+        <div id="uploadError"></div>
+      </div>
+
+      <div id="hint">
+        Сначала ответь на вопрос ✨<br>
+        <small>После правильного ответа можно закрасить один элемент.</small>
+      </div>
+
+      <div id="successPop"></div>
+    </div>
+
+    <div id="tools">
+      <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp">
+      <label class="fakeButton" for="fileInput">Заменить раскраску</label>
+
+      <div class="toolBox">
+        Цвет <input id="colorPicker" type="color" value="#ff595e">
+      </div>
+
+      <div id="palette"></div>
+
+      <button id="undoBtn">Назад</button>
+      <button id="clearBtn">Очистить</button>
+      <button id="saveBtn" class="primary">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div id="saveModal">
+  <div class="saveBox">
+    <h2>Картинка готова</h2>
+    <p>Если скачивание в Genially не началось автоматически, открой картинку в новой вкладке и сохрани её оттуда.</p>
+    <img id="savePreview" alt="Готовая раскраска">
+    <div class="saveActions">
+      <button id="openImageBtn" class="primary">Открыть картинку</button>
+      <button id="closeSaveBtn">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+
+const get = (name, def="") => {
+  const v = params.get(name);
+  return (v === null || v === "null" || v === "") ? def : v;
+};
+
+const num = (name, def) => {
+  const v = parseFloat(get(name, ""));
+  return Number.isFinite(v) ? v : def;
+};
+
+const bool = (name, def=false) => {
+  const v = get(name, def ? "1" : "0");
+  return v === "1" || v === "true" || v === "yes";
+};
+
+function parseJsonParam(name, def){
+  try{
+    const value = get(name, "");
+    if(!value) return def;
+    return JSON.parse(value);
+  }catch(e){
+    return def;
+  }
+}
+
+const DEFAULT_QUESTIONS = [
+  {
+    text:"Выбери слово, которое отвечает на вопрос «кто?»",
+    answerType:"single",
+    variants:[
+      {text:"ученик", correct:true},
+      {text:"стол", correct:false},
+      {text:"бежать", correct:false}
+    ],
+    correctText:"",
+    caseSensitive:false
+  },
+  {
+    text:"Отметь все слова-предметы.",
+    answerType:"multiple",
+    variants:[
+      {text:"солнце", correct:true},
+      {text:"яркий", correct:false},
+      {text:"тетрадь", correct:true}
+    ],
+    correctText:"",
+    caseSensitive:false
+  },
+  {
+    text:"Введи пропущенную букву: ж...раф",
+    answerType:"text",
+    variants:[],
+    correctText:"и",
+    caseSensitive:false
+  }
+];
+
+const DEFAULT_PALETTE = [
+  "#ff595e","#ffca3a","#8ac926","#1982c4","#6a4c93",
+  "#f72585","#4cc9f0","#ff9f1c","#ffffff","#8d6e63",
+  "#000000","#bde0fe"
+];
+
+const CONFIG = {
+  font: get("font", "Arial"),
+  bgColor: get("bg_c", "transparent"),
+  textColor: get("fcolor", "#2f241d"),
+  buttonTextColor: get("btn_color", get("fcolor", "#2f241d")),
+  accentColor: get("pcolor", "#ff9f43"),
+  panelColor: get("panel_c", "#ffffff"),
+  panelOpacity: num("panel_op", .9),
+  borderColor: get("b_c", "#ff9f43"),
+  borderOpacity: num("b_op", .35),
+  borderWidth: num("b_w", 2),
+  radius: num("b_r", 24),
+  palette: DEFAULT_PALETTE,
+  successText: get("ok_t", "Верно! Закрась один элемент 🎨"),
+  afterColorText: get("next_t", "Отлично! Следующее задание"),
+  badText: get("bad_t", "Подумай ещё"),
+  finishText: get("fin_t", "Готово! Теперь можно дораскрасить всё свободно 🌟"),
+  successSound: get("s_ok", ""),
+  successImage: get("ok_img", ""),
+  finishImage: get("fin_img", ""),
+  freeColorAfterFinish: bool("free", true),
+  questions: parseJsonParam("q", DEFAULT_QUESTIONS)
+};
+
+function hexToRgbParts(hex){
+  hex = String(hex||"#ffffff").replace("#","");
+  if(hex === "transparent") return "255,255,255";
+  if(hex.length===3) hex = hex.split("").map(x=>x+x).join("");
+  return [
+    parseInt(hex.slice(0,2),16)||255,
+    parseInt(hex.slice(2,4),16)||255,
+    parseInt(hex.slice(4,6),16)||255
+  ].join(",");
+}
+
+function applyTheme(){
+  if(CONFIG.font && CONFIG.font !== "Arial"){
+    const link=document.createElement("link");
+    link.rel="stylesheet";
+    link.href="https://fonts.googleapis.com/css2?family="+encodeURIComponent(CONFIG.font).replace(/%20/g,"+")+":wght@400;700;800;900&display=swap";
+    document.head.appendChild(link);
+  }
+
+  document.documentElement.style.setProperty("--font", `'${CONFIG.font||"Arial"}', Arial, sans-serif`);
+  document.documentElement.style.setProperty("--bg", CONFIG.bgColor);
+  document.documentElement.style.setProperty("--text", CONFIG.textColor);
+  document.documentElement.style.setProperty("--button-text", CONFIG.buttonTextColor);
+  document.documentElement.style.setProperty("--accent", CONFIG.accentColor);
+  document.documentElement.style.setProperty("--panel", hexToRgbParts(CONFIG.panelColor));
+  document.documentElement.style.setProperty("--panel-opacity", CONFIG.panelOpacity);
+  document.documentElement.style.setProperty("--border", hexToRgbParts(CONFIG.borderColor));
+  document.documentElement.style.setProperty("--border-opacity", CONFIG.borderOpacity);
+  document.documentElement.style.setProperty("--border-width", CONFIG.borderWidth+"px");
+  document.documentElement.style.setProperty("--radius", CONFIG.radius+"px");
+}
+
+applyTheme();
+
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d",{willReadFrequently:true});
+const taskEl=document.getElementById("task");
+const answersEl=document.getElementById("answers");
+const feedbackEl=document.getElementById("feedback");
+const progressEl=document.getElementById("progress");
+const hintEl=document.getElementById("hint");
+const toolsEl=document.getElementById("tools");
+const successPop=document.getElementById("successPop");
+const colorPicker=document.getElementById("colorPicker");
+const paletteEl=document.getElementById("palette");
+const undoBtn=document.getElementById("undoBtn");
+const clearBtn=document.getElementById("clearBtn");
+const saveBtn=document.getElementById("saveBtn");
+const saveModal=document.getElementById("saveModal");
+const savePreview=document.getElementById("savePreview");
+const openImageBtn=document.getElementById("openImageBtn");
+const closeSaveBtn=document.getElementById("closeSaveBtn");
+const fileInput=document.getElementById("fileInput");
+const uploadOverlay=document.getElementById("uploadOverlay");
+const uploadError=document.getElementById("uploadError");
+
+let originalImageData=null;
+let history=[];
+let current=0;
+let canColorOne=false;
+let finished=false;
+let selected=new Set();
+let isReady=false;
+let finishPopShown=false;
+let lastSavedDataUrl="";
+
+CONFIG.palette.forEach(c=>{
+  const s=document.createElement("div");
+  s.className="swatch";
+  s.style.background=c;
+  s.onclick=()=>colorPicker.value=c;
+  paletteEl.appendChild(s);
+});
+
+function playSuccess(){
+  if(CONFIG.successSound){
+    try{ new Audio(CONFIG.successSound).play().catch(()=>{}); }catch(e){}
+  }
+}
+
+function showSuccessPop(text,imgUrl){
+  if(!text && !imgUrl) return;
+  successPop.innerHTML = (imgUrl ? `<img src="${imgUrl}">` : "") + `<div>${text||""}</div>`;
+  successPop.style.display="block";
+  setTimeout(()=>successPop.style.display="none", 1300);
+}
+
+function renderProgress(){
+  const total=CONFIG.questions.length;
+  let label = !isReady ? "Загрузка раскраски" : finished ? "Финал" : "Вопрос "+Math.min(current+1,total)+" из "+total;
+  let html=`<span>${label}</span><span style="display:inline-flex;gap:5px">`;
+
+  for(let i=0;i<total;i++){
+    html+=`<span class="dot ${finished||i<current?'done':isReady&&i===current?'current':''}"></span>`;
+  }
+
+  html+="</span>";
+  progressEl.innerHTML=html;
+}
+
+function render(){
+  selected.clear();
+  renderProgress();
+  answersEl.innerHTML="";
+  feedbackEl.textContent="";
+  feedbackEl.className="";
+
+  if(!isReady){
+    taskEl.textContent="Сначала загрузите раскраску";
+    feedbackEl.textContent="После загрузки появится первое задание.";
+    feedbackEl.className="info";
+    updateLock();
+    return;
+  }
+
+  if(finished){
+    taskEl.textContent=CONFIG.finishText;
+    feedbackEl.textContent=CONFIG.freeColorAfterFinish ? "Можно дораскрасить все элементы свободно." : "";
+    feedbackEl.className="good";
+    canColorOne = !!CONFIG.freeColorAfterFinish;
+    updateLock();
+
+    if(CONFIG.finishImage && !finishPopShown){
+      finishPopShown = true;
+      showSuccessPop("", CONFIG.finishImage);
+    }
+
+    return;
+  }
+
+  if(canColorOne){
+    taskEl.textContent="Выбери цвет и закрась один элемент картинки.";
+    feedbackEl.textContent=CONFIG.successText;
+    feedbackEl.className="good";
+    updateLock();
+    return;
+  }
+
+  const q=CONFIG.questions[current] || DEFAULT_QUESTIONS[0];
+  taskEl.textContent=q.text || "Ответь на вопрос";
+
+  if(q.answerType==="text"){
+    const input=document.createElement("input");
+    input.className="answerInput";
+    input.placeholder="Введи ответ...";
+    input.addEventListener("keydown",e=>{
+      if(e.key==="Enter") checkText(input.value);
+    });
+
+    const btn=document.createElement("button");
+    btn.className="primary";
+    btn.textContent="Проверить";
+    btn.onclick=()=>checkText(input.value);
+
+    answersEl.appendChild(input);
+    answersEl.appendChild(btn);
+    setTimeout(()=>input.focus(),100);
+  }else{
+    (q.variants||[]).forEach((v,i)=>{
+      const b=document.createElement("button");
+      b.textContent=v.text || ("Вариант "+(i+1));
+
+      b.onclick=()=>{
+        if(q.answerType==="multiple"){
+          if(selected.has(i)){
+            selected.delete(i);
+            b.classList.remove("selected");
+          }else{
+            selected.add(i);
+            b.classList.add("selected");
+          }
+        }else{
+          checkSingle(i);
+        }
+      };
+
+      answersEl.appendChild(b);
+    });
+
+    if(q.answerType==="multiple"){
+      const btn=document.createElement("button");
+      btn.className="primary";
+      btn.textContent="Проверить";
+      btn.onclick=checkMultiple;
+      answersEl.appendChild(btn);
+    }
+  }
+
+  updateLock();
+}
+
+function ok(){
+  canColorOne=true;
+  playSuccess();
+  showSuccessPop(CONFIG.successText, CONFIG.successImage);
+  render();
+}
+
+function bad(){
+  feedbackEl.textContent=CONFIG.badText;
+  feedbackEl.className="bad";
+}
+
+function checkSingle(i){
+  const q=CONFIG.questions[current] || DEFAULT_QUESTIONS[0];
+  q.variants && q.variants[i] && q.variants[i].correct ? ok() : bad();
+}
+
+function checkMultiple(){
+  const q=CONFIG.questions[current] || DEFAULT_QUESTIONS[0];
+  const correct=new Set();
+  (q.variants||[]).forEach((v,i)=>{ if(v.correct) correct.add(i); });
+
+  let pass=selected.size===correct.size;
+  selected.forEach(i=>{ if(!correct.has(i)) pass=false; });
+  pass ? ok() : bad();
+}
+
+function norm(t,q){
+  t=String(t||"").trim();
+  return q.caseSensitive ? t : t.toLowerCase();
+}
+
+function checkText(v){
+  const q=CONFIG.questions[current] || DEFAULT_QUESTIONS[0];
+  norm(v,q) && norm(v,q)===norm(q.correctText,q) ? ok() : bad();
+}
+
+function afterPaint(){
+  if(current>=CONFIG.questions.length-1){
+    finished=true;
+    canColorOne=!!CONFIG.freeColorAfterFinish;
+  }else{
+    current++;
+    canColorOne=false;
+  }
+  render();
+  if(!finished){
+    feedbackEl.textContent=CONFIG.afterColorText;
+    feedbackEl.className="info";
+  }
+}
+
+function updateLock(){
+  if(!isReady){
+    canvas.classList.add("locked");
+    hintEl.style.display="none";
+    uploadOverlay.style.display="flex";
+    toolsEl.style.display="none";
+    return;
+  }
+
+  uploadOverlay.style.display="none";
+
+  if(finished && CONFIG.freeColorAfterFinish){
+    canvas.classList.remove("locked");
+    hintEl.style.display="none";
+    toolsEl.style.display="flex";
+    return;
+  }
+
+  if(canColorOne){
+    canvas.classList.remove("locked");
+    hintEl.style.display="none";
+    toolsEl.style.display="flex";
+  }else{
+    canvas.classList.add("locked");
+    hintEl.style.display="block";
+    toolsEl.style.display="flex";
+  }
+}
+
+function resetGameState(){
+  current=0;
+  canColorOne=false;
+  finished=false;
+  finishPopShown=false;
+  selected.clear();
+}
+
+function drawImageToCanvas(img){
+  const maxW=1400;
+  const maxH=850;
+  let w=img.naturalWidth || img.width;
+  let h=img.naturalHeight || img.height;
+  const scale=Math.min(maxW/w,maxH/h,1);
+  w=Math.round(w*scale);
+  h=Math.round(h*scale);
+
+  canvas.width=w;
+  canvas.height=h;
+  ctx.fillStyle="#fff";
+  ctx.fillRect(0,0,w,h);
+  ctx.drawImage(img,0,0,w,h);
+
+  originalImageData=ctx.getImageData(0,0,w,h);
+  history=[];
+  pushHistory();
+  isReady=true;
+  resetGameState();
+  uploadError.textContent="";
+  render();
+}
+
+function loadLocalFile(file){
+  if(!file) return;
+
+  if(!file.type.startsWith("image/")){
+    uploadError.textContent="Нужна картинка: PNG, JPG или WEBP.";
+    return;
+  }
+
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const img=new Image();
+    img.onload=()=>drawImageToCanvas(img);
+    img.onerror=()=>{ uploadError.textContent="Не получилось открыть картинку. Попробуйте другой файл."; };
+    img.src=reader.result;
+  };
+  reader.onerror=()=>{ uploadError.textContent="Не получилось прочитать файл."; };
+  reader.readAsDataURL(file);
+}
+
+fileInput.addEventListener("change",()=>{
+  loadLocalFile(fileInput.files && fileInput.files[0]);
+  fileInput.value="";
+});
+
+function hexToRgb(hex){
+  const v=hex.replace("#","");
+  return {
+    r:parseInt(v.slice(0,2),16),
+    g:parseInt(v.slice(2,4),16),
+    b:parseInt(v.slice(4,6),16),
+    a:255
+  };
+}
+
+function getPixel(data,x,y,w){
+  const i=(y*w+x)*4;
+  return {r:data[i],g:data[i+1],b:data[i+2],a:data[i+3]};
+}
+
+function setPixel(data,x,y,w,c){
+  const i=(y*w+x)*4;
+  data[i]=c.r; data[i+1]=c.g; data[i+2]=c.b; data[i+3]=c.a;
+}
+
+function dist(a,b){
+  return Math.abs(a.r-b.r)+Math.abs(a.g-b.g)+Math.abs(a.b-b.b)+Math.abs(a.a-b.a);
+}
+
+function isLine(p){
+  return p.a>10 && p.r<80 && p.g<80 && p.b<80;
+}
+
+function point(e){
+  const r=canvas.getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  const cy=e.touches?e.touches[0].clientY:e.clientY;
+  return {
+    x:Math.floor((cx-r.left)*canvas.width/r.width),
+    y:Math.floor((cy-r.top)*canvas.height/r.height)
+  };
+}
+
+function flood(x,y,color){
+  if(!isReady) return;
+  if(!canColorOne && !(finished&&CONFIG.freeColorAfterFinish)) return;
+
+  const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const data=imageData.data;
+  const w=canvas.width;
+  const h=canvas.height;
+  const target=getPixel(data,x,y,w);
+
+  if(isLine(target)||dist(target,color)<20) return;
+
+  pushHistory();
+
+  const tolerance=75;
+  const stack=[[x,y]];
+  const visited=new Uint8Array(w*h);
+  let painted=0;
+
+  while(stack.length){
+    const [px,py]=stack.pop();
+    if(px<0||py<0||px>=w||py>=h) continue;
+    const pos=py*w+px;
+    if(visited[pos]) continue;
+    visited[pos]=1;
+
+    const cur=getPixel(data,px,py,w);
+    if(isLine(cur)||dist(cur,target)>tolerance) continue;
+
+    setPixel(data,px,py,w,color);
+    painted++;
+    stack.push([px+1,py],[px-1,py],[px,py+1],[px,py-1]);
+  }
+
+  if(painted>0){
+    ctx.putImageData(imageData,0,0);
+    if(!finished) afterPaint();
+  }
+}
+
+canvas.addEventListener("click",e=>{
+  const p=point(e);
+  flood(p.x,p.y,hexToRgb(colorPicker.value));
+});
+
+canvas.addEventListener("touchstart",e=>{
+  e.preventDefault();
+  const p=point(e);
+  flood(p.x,p.y,hexToRgb(colorPicker.value));
+},{passive:false});
+
+function pushHistory(){
+  try{
+    history.push(ctx.getImageData(0,0,canvas.width,canvas.height));
+    if(history.length>40) history.shift();
+  }catch(e){}
+}
+
+undoBtn.onclick=()=>{
+  if(history.length<=1) return;
+  history.pop();
+  ctx.putImageData(history[history.length-1],0,0);
+};
+
+clearBtn.onclick=()=>{
+  if(!originalImageData) return;
+  ctx.putImageData(originalImageData,0,0);
+  history=[];
+  pushHistory();
+  resetGameState();
+  render();
+};
+
+function showSaveModal(dataUrl){
+  lastSavedDataUrl = dataUrl;
+  savePreview.src = dataUrl;
+  saveModal.style.display = "flex";
+}
+
+function tryDownload(dataUrl){
+  const a=document.createElement("a");
+  a.download="raskraska.png";
+  a.href=dataUrl;
+  a.target="_blank";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+saveBtn.onclick=()=>{
+  if(!isReady){
+    uploadError.textContent="Сначала загрузите раскраску.";
+    return;
+  }
+
+  try{
+    const dataUrl = canvas.toDataURL("image/png");
+    tryDownload(dataUrl);
+    setTimeout(()=>showSaveModal(dataUrl), 300);
+  }catch(e){
+    alert("Не получилось сохранить картинку. Попробуйте загрузить файл с компьютера в формате PNG или JPG.");
+  }
+};
+
+openImageBtn.onclick=()=>{
+  if(!lastSavedDataUrl) return;
+  const w = window.open("", "_blank");
+
+  if(w){
+    w.document.write(`
+      <!DOCTYPE html>
+      <html lang="ru">
+      <head>
+        <meta charset="UTF-8">
+        <title>Готовая раскраска</title>
+        <style>
+          body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f5f5f5;font-family:Arial,sans-serif;padding:20px}
+          img{max-width:100%;max-height:92vh;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        </style>
+      </head>
+      <body>
+        <img src="${lastSavedDataUrl}" alt="Готовая раскраска">
+      </body>
+      </html>
+    `);
+    w.document.close();
+  }else{
+    alert("Браузер заблокировал новое окно. Попробуйте разрешить всплывающие окна для этой страницы.");
+  }
+};
+
+closeSaveBtn.onclick=()=>{ saveModal.style.display = "none"; };
+
+canvas.width=900;
+canvas.height=520;
+ctx.fillStyle="#fff";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+render();
+</script>
+</body>
+</html>
